@@ -443,6 +443,7 @@ class HardwareExploration(
 
     private fun readInstenvData(instenvFileName: String): ProvisionedJira {
         val instenv: Instenv = Yaml().loadAs(File(instenvFileName).inputStream(), Instenv::class.java)
+        val sshKeyPath = "."
 
         var results = ArrayList<StartedNode>()
         val jiraNodes: List<InstenvInstance> = instenv.ec2!!.jiraNodes()
@@ -458,7 +459,7 @@ class HardwareExploration(
                     host = SshHost(
                         ipAddress = jiraNodes.get(i).ipAddress(),
                         authentication = PublicKeyAuthentication(
-                            key = Paths.get("fakePath")
+                            key = Paths.get(sshKeyPath)
                         ),
                         port = 22,
                         userName = "ubuntu"
@@ -478,7 +479,7 @@ class HardwareExploration(
                         userName = "ubuntu",
                         port = 22,
                         authentication = PublicKeyAuthentication(
-                            key = Paths.get("fakePath")
+                            key = Paths.get(sshKeyPath)
                         )
                     ),
                     location = "/var/atlassian/application-data/jira/"

@@ -31,7 +31,8 @@ import java.nio.file.Paths
 
 class HardwareRecommendationIT {
 
-    private val taskName = "DCNG-195-7nodes-lb9"
+    private val taskName = "DCNG-195-7nodes-lb10"
+    private val instenvFileName = "/Users/damiankedzierski/projects/tools/jira-hardware-exploration/src/test/resources/jira-bottlenecks.yml"
     private val workspace = IntegrationTestRuntime.rootWorkspace.isolateTask(taskName)
     private val jswVersion = System.getProperty("hwr.jsw.version") ?: "8.1.0"
 
@@ -43,7 +44,7 @@ class HardwareRecommendationIT {
     @Test
     fun shouldRecommendHardware() {
 
-//        requireCleanRepo()
+        requireCleanRepo()
         val aws = IntegrationTestRuntime.prepareAws()
 
         val engine = HardwareRecommendationEngine(
@@ -71,7 +72,7 @@ class HardwareRecommendationIT {
                 localPath = workspace.directory
             ),
             explorationCache = HardwareExplorationResultCache(workspace.directory.resolve("processed-cache.json")),
-            instenvFileName = "/Users/damiankedzierski/projects/tools/jira-hardware-exploration/src/test/resources/jira-bottlenecks.yml"
+            instenvFileName = instenvFileName
         )
         engine.recommend()
     }

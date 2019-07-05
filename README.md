@@ -1,12 +1,14 @@
 ### Usage
 
 1. Set up AWS credentials
-    * Locally according to [default AWS credentials]
+    * Run [cloudtoken] in deamon mode
     * Or let STS work out-of-the-box for [Bamboo]
 2. Create a `jira-license.txt` file and fill it with a Jira license
     * BYO
     * Or reuse the one from [Bamboo]
-3. Run `recommendHardware` Gradle task
+3. Set path to your instenv output YAML file (for example resources/jira-bottlenecks.yml) in HardwareRecommendationIT.
+4. Set your unique task name in HardwareRecommendationIT.
+4. Run `recommendHardware` Gradle task
     * From terminal: `./gradlew recommendHardware`
     * Or in short: `./gradlew recHar`
     * Or if you want to override Jira Software version without code changes: `./gradlew recHar -Dhwr.jsw.version=8.1.0`
@@ -38,6 +40,7 @@ Start from the [test source] and tweak existing knobs and levers or build new on
 
 Feel free to chat, ask for help, bounce ideas on the [JPT Community Slack].
 
+[cloudtoken]: https://hello.atlassian.net/wiki/spaces/CORE/pages/167276158/HOWTO+-+Install+and+Use+Cloudtoken.#HOWTO-InstallandUseCloudtoken.-DaemonMode
 [default AWS credentials]: https://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/auth/DefaultAWSCredentialsProviderChain.html
 [Bamboo]: https://server-gdn-bamboo.internal.atlassian.com/browse/QUICK-JHWR
 [test source]: src/test/kotlin/com/atlassian/performance/tools/hardware/HardwareRecommendationIT.kt
