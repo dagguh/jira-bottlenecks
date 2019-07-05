@@ -25,7 +25,8 @@ class HardwareRecommendationEngine(
     private val aws: Aws,
     private val workspace: TaskWorkspace,
     private val s3Cache: S3Cache,
-    private val explorationCache: HardwareExplorationResultCache
+    private val explorationCache: HardwareExplorationResultCache,
+    private val instenvFileName: String
 ) {
 
     private val logger = LogManager.getLogger(this::class.java)
@@ -108,7 +109,8 @@ class HardwareRecommendationEngine(
         s3Cache = s3Cache,
         explorationCache = explorationCache,
         aws = aws,
-        task = workspace
+        task = workspace,
+        instenvFileName = instenvFileName
     ).exploreHardware()
 
     private fun exploreDbHardware(

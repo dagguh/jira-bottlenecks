@@ -63,6 +63,7 @@ dependencies {
     testCompile("junit:junit:4.12")
     testCompile("org.hamcrest:hamcrest-library:1.3")
     testCompile("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.2.70")
+    testCompile("org.yaml:snakeyaml:1.18")
 
     listOf(
         "api",

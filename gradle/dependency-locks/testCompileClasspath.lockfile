@@ -81,4 +81,5 @@ org.seleniumhq.selenium:selenium-api:3.11.0
 org.seleniumhq.selenium:selenium-remote-driver:3.11.0
 org.seleniumhq.selenium:selenium-support:3.11.0
 org.slf4j:slf4j-api:1.8.0-alpha2
+org.yaml:snakeyaml:1.18
 software.amazon.ion:ion-java:1.0.2

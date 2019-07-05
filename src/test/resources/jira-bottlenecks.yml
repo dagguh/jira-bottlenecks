@@ -1,0 +1,54 @@
+---
+app:
+  description: Installed application and login details
+  app_profile: jira-dc
+  app_base_url: http://internal-jira-bottlenecks-69967251.eu-west-1.elb.amazonaws.com
+  app_version:
+  user_name: admin
+  password: MasterPassword18
+  end_of_life: 2019-07-11T14:06:55+0000
+
+elb:
+  description: Load balancer details
+  url: http://internal-jira-bottlenecks-69967251.eu-west-1.elb.amazonaws.com
+
+ec2:
+  description: List of EC2 instances with connect details
+  instances:
+    - type: application
+      size: m4.4xlarge
+      dns_name: ip-10-81-2-45.eu-west-1.compute.internal
+      ec2_id: i-0229961026ee117e1
+      ssh: ssh -i ./data/ssh/dkedzierski-instenv-dataset.pem ubuntu@10.81.2.45
+      app_url: http://10.81.2.45:8080
+    - type: application
+      size: m4.4xlarge
+      dns_name: ip-10-81-2-155.eu-west-1.compute.internal
+      ec2_id: i-07691dd55ee14a7a0
+      ssh: ssh -i ./data/ssh/dkedzierski-instenv-dataset.pem ubuntu@10.81.2.155
+      app_url: http://10.81.2.155:8080
+    - type: nfs
+      size: m4.large
+      dns_name: ip-10-81-2-21.eu-west-1.compute.internal
+      ec2_id: i-057db2d826ab94ba7
+      ssh: ssh -i ./data/ssh/dkedzierski-instenv-dataset.pem ubuntu@10.81.2.21
+
+
+rds:
+  description: RDS instances and login details
+  type: postgresql
+  url: jira-bottlenecks.ci8d60ckydkp.eu-west-1.rds.amazonaws.com:5432
+  db_name: atldb
+  db_user: atldbuser
+  db_password: MasterPassword15
+
+
+nfs:
+  description: NFS connect command
+  mount_point: 10.81.2.21:/mnt/home
+  nfs_ec2_id: i-057db2d826ab94ba7
+
+
+
+end:
+

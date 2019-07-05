@@ -1,35 +1,41 @@
 package com.atlassian.performance.tools.hardware
 
+import com.amazonaws.services.ec2.model.DescribeSubnetsRequest
+import com.amazonaws.services.ec2.model.DescribeVpcsRequest
 import com.atlassian.performance.tools.aws.api.Aws
 import com.atlassian.performance.tools.aws.api.Investment
-import com.atlassian.performance.tools.awsinfrastructure.api.InfrastructureFormula
+import com.atlassian.performance.tools.aws.api.Storage
+import com.atlassian.performance.tools.aws.api.UnallocatedResource
+import com.atlassian.performance.tools.awsinfrastructure.api.RemoteLocation
 import com.atlassian.performance.tools.awsinfrastructure.api.TargetingVirtualUserOptions
-import com.atlassian.performance.tools.awsinfrastructure.api.hardware.EbsEc2Instance
-import com.atlassian.performance.tools.awsinfrastructure.api.hardware.Volume
-import com.atlassian.performance.tools.awsinfrastructure.api.jira.DataCenterFormula
-import com.atlassian.performance.tools.awsinfrastructure.api.loadbalancer.ElasticLoadBalancerFormula
-import com.atlassian.performance.tools.awsinfrastructure.api.virtualusers.MulticastVirtualUsersFormula
+import com.atlassian.performance.tools.awsinfrastructure.api.jira.Jira
+import com.atlassian.performance.tools.awsinfrastructure.api.jira.ProvisionedJira
+import com.atlassian.performance.tools.awsinfrastructure.api.jira.StartedNode
 import com.atlassian.performance.tools.hardware.failure.FailureTolerance
 import com.atlassian.performance.tools.hardware.guidance.ExplorationGuidance
+import com.atlassian.performance.tools.hardware.instenv.Instenv
+import com.atlassian.performance.tools.hardware.instenv.InstenvInstance
+import com.atlassian.performance.tools.hardware.provisioning.CopiedMulticastVirtualUsersFormula
+import com.atlassian.performance.tools.hardware.provisioning.CopiedNetwork
+import com.atlassian.performance.tools.hardware.provisioning.CopiedProvisioningPerformanceTest
+import com.atlassian.performance.tools.hardware.provisioning.InstenvInfrastructureFormula
 import com.atlassian.performance.tools.hardware.tuning.JiraNodeTuning
 import com.atlassian.performance.tools.hardware.vu.CustomScenario
 import com.atlassian.performance.tools.infrastructure.api.distribution.ProductDistribution
-import com.atlassian.performance.tools.infrastructure.api.jira.JiraNodeConfig
-import com.atlassian.performance.tools.infrastructure.api.profiler.AsyncProfiler
 import com.atlassian.performance.tools.io.api.dereference
 import com.atlassian.performance.tools.io.api.directories
 import com.atlassian.performance.tools.jiraactions.api.*
-import com.atlassian.performance.tools.jiraperformancetests.api.ProvisioningPerformanceTest
 import com.atlassian.performance.tools.jirasoftwareactions.api.actions.ViewBacklogAction.Companion.VIEW_BACKLOG
 import com.atlassian.performance.tools.lib.*
-import com.atlassian.performance.tools.lib.infrastructure.BestEffortProfiler
 import com.atlassian.performance.tools.lib.infrastructure.PatientChromium69
-import com.atlassian.performance.tools.lib.infrastructure.WgetOracleJdk
 import com.atlassian.performance.tools.lib.s3cache.S3Cache
 import com.atlassian.performance.tools.report.api.FullReport
-import com.atlassian.performance.tools.report.api.StandardTimeline
+import com.atlassian.performance.tools.report.api.FullTimeline
 import com.atlassian.performance.tools.report.api.result.EdibleResult
 import com.atlassian.performance.tools.report.api.result.RawCohortResult
+import com.atlassian.performance.tools.ssh.api.Ssh
+import com.atlassian.performance.tools.ssh.api.SshHost
+import com.atlassian.performance.tools.ssh.api.auth.PublicKeyAuthentication
 import com.atlassian.performance.tools.virtualusers.api.TemporalRate
 import com.atlassian.performance.tools.virtualusers.api.VirtualUserOptions
 import com.atlassian.performance.tools.virtualusers.api.browsers.HeadlessChromeBrowser
@@ -39,8 +45,10 @@ import com.atlassian.performance.tools.workspace.api.TaskWorkspace
 import com.atlassian.performance.tools.workspace.api.TestWorkspace
 import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.Logger
+import org.yaml.snakeyaml.Yaml
 import java.io.File
 import java.net.URI
+import java.nio.file.Paths
 import java.time.Duration
 import java.util.concurrent.*
 
@@ -57,7 +65,8 @@ class HardwareExploration(
     private val errorRateWarningThreshold: Double,
     private val apdexSpreadWarningThreshold: Double,
     private val s3Cache: S3Cache,
-    private val explorationCache: HardwareExplorationResultCache
+    private val explorationCache: HardwareExplorationResultCache,
+    private val instenvFileName: String
 ) {
     private val awsParallelism = 6
     private val results = ConcurrentHashMap<Hardware, Future<HardwareExplorationResult>>()
@@ -239,7 +248,7 @@ class HardwareExploration(
     private fun postProcess(
         rawResults: RawCohortResult
     ): EdibleResult = synchronized(this) {
-        val timeline = StandardTimeline(scale.load.total)
+        val timeline = FullTimeline()
         return rawResults.prepareForJudgement(timeline)
     }
 
@@ -296,6 +305,7 @@ class HardwareExploration(
         missingResultCount: Int,
         executor: ExecutorService
     ): List<HardwareTestResult> {
+
         if (missingResultCount <= 0) {
             return emptyList()
         }
@@ -326,7 +336,8 @@ class HardwareExploration(
     ): CompletableFuture<HardwareTestResult> {
         return dataCenter(
             cohort = hardware.nameCohort(workspace),
-            hardware = hardware
+            hardware = hardware,
+            provisionedJira = readInstenvData(instenvFileName)
         ).executeAsync(
             workspace,
             executor,
@@ -340,35 +351,24 @@ class HardwareExploration(
 
     private fun dataCenter(
         cohort: String,
-        hardware: Hardware
-    ): ProvisioningPerformanceTest = ProvisioningPerformanceTest(
+        hardware: Hardware,
+        provisionedJira: ProvisionedJira
+    ): CopiedProvisioningPerformanceTest = CopiedProvisioningPerformanceTest(
         cohort = cohort,
-        infrastructureFormula = InfrastructureFormula(
+        infrastructureFormula = InstenvInfrastructureFormula(
             investment = investment,
-            jiraFormula = DataCenterFormula.Builder(
-                productDistribution = product,
-                jiraHomeSource = scale.dataset.dataset.jiraHomeSource,
-                database = scale.dataset.dataset.database
-            )
-                .configs((1..hardware.nodeCount).map { nodeNumber ->
-                    JiraNodeConfig.Builder()
-                        .name("jira-node-$nodeNumber")
-                        .profiler(BestEffortProfiler(AsyncProfiler()))
-                        .jdk(WgetOracleJdk())
-                        .build()
-                        .let { tuning.tune(it, hardware, scale) }
-                })
-                .loadBalancerFormula(ElasticLoadBalancerFormula())
-                .computer(EbsEc2Instance(hardware.jira))
-                .jiraVolume(Volume(300))
-                .databaseComputer(EbsEc2Instance(hardware.db))
-                .databaseVolume(Volume(300))
-                .build(),
-            virtualUsersFormula = MulticastVirtualUsersFormula.Builder(
+            provisionedJira = provisionedJira,
+            virtualUsersFormula = CopiedMulticastVirtualUsersFormula.Builder(
                 nodes = scale.vuNodes,
                 shadowJar = dereference("jpt.virtual-users.shadow-jar")
             )
+                .network(CopiedNetwork(
+                    subnet = aws.ec2.describeSubnets(DescribeSubnetsRequest().withSubnetIds("subnet-05b267a1d79d858e4")).subnets.single(),
+                    vpc = aws.ec2.describeVpcs(DescribeVpcsRequest().withVpcIds("vpc-01b60a3acf6adce32")).vpcs.single()
+
+                ))
                 .browser(PatientChromium69())
+                .usePrivateIps(true)
                 .build(),
             aws = aws
         )
@@ -438,6 +438,55 @@ class HardwareExploration(
                 .createUsers(true)
                 .skipSetup(true)
                 .build()
+        )
+    }
+
+    private fun readInstenvData(instenvFileName: String): ProvisionedJira {
+        val instenv: Instenv = Yaml().loadAs(File(instenvFileName).inputStream(), Instenv::class.java)
+
+        var results = ArrayList<StartedNode>()
+        val jiraNodes: List<InstenvInstance> = instenv.ec2!!.jiraNodes()
+        for (i in 0 until jiraNodes.size) {
+            results.add(StartedNode(
+                name = "node-$i",
+                jiraHome = "/var/atlassian/application-data/jira/",
+                analyticLogs = "/var/atlassian/application-data/jira/analytics-logs/",
+                monitoringProcesses = listOf(),
+                unpackedProduct = "/opt/atlassian/jira/current",
+                resultsTransport = Storage(bucketName = "dkedzierski-bottlenecks", prefix = "instenv", s3 = aws.s3),
+                ssh = Ssh(
+                    host = SshHost(
+                        ipAddress = jiraNodes.get(i).ipAddress(),
+                        authentication = PublicKeyAuthentication(
+                            key = Paths.get("fakePath")
+                        ),
+                        port = 22,
+                        userName = "ubuntu"
+                    )
+                )
+            ))
+        }
+
+        val jiraHome: InstenvInstance = instenv.ec2!!.homeNode()
+
+        return ProvisionedJira(
+            jira = Jira(
+                nodes = results,
+                jiraHome = RemoteLocation(
+                    host = SshHost(
+                        ipAddress = jiraHome.ipAddress(),
+                        userName = "ubuntu",
+                        port = 22,
+                        authentication = PublicKeyAuthentication(
+                            key = Paths.get("fakePath")
+                        )
+                    ),
+                    location = "/var/atlassian/application-data/jira/"
+                ),
+                database = null,
+                address = URI(instenv.app!!.app_base_url)
+            ),
+            resource = UnallocatedResource()
         )
     }
 }
