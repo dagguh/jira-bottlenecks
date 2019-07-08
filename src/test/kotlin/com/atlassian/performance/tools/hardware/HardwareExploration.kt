@@ -442,7 +442,7 @@ class HardwareExploration(
     }
 
     private fun readInstenvData(instenvFileName: String): ProvisionedJira {
-        val instenv: Instenv = Yaml().loadAs(File(instenvFileName).inputStream(), Instenv::class.java)
+        val instenv: Instenv = Yaml().loadAs(javaClass.classLoader.getResourceAsStream(instenvFileName), Instenv::class.java)
         val sshKeyPath = "."
 
         var results = ArrayList<StartedNode>()
