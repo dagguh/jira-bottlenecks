@@ -29,10 +29,13 @@ tasks.withType(KotlinCompile::class).forEach {
     }
 }
 
+val hwr = "HWR"
+
 task<Test>("recommendHardware").apply {
     outputs.upToDateWhen { false }
     description = "Recommends hardware setups for Jira based on performance tests"
     include("**/HardwareRecommendationIT.class")
+    group = hwr
     val shadowJarTask = tasks.getByPath(":virtual-users:shadowJar")
     dependsOn(shadowJarTask)
     systemProperty("jpt.virtual-users.shadow-jar", shadowJarTask.outputs.files.files.first())
@@ -47,6 +50,14 @@ task<Test>("recommendHardware").apply {
 task<Test>("cleanUpAfterBamboo").apply {
     outputs.upToDateWhen { false }
     include("**/BambooCleanupIT.class")
+    group = hwr
+}
+
+task<Test>("awsDeleteMyStacks").apply {
+    outputs.upToDateWhen { false }
+    description = "Deletes all stacks that were provisioned by current user"
+    include("**/MyStacksCleanupIT.class")
+    group = hwr
 }
 
 dependencies {
