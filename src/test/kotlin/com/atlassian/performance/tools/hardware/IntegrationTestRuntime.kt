@@ -17,21 +17,22 @@ object IntegrationTestRuntime {
     val rootWorkspace = RootWorkspace(Paths.get("build"))
 
     fun prepareAws() = Aws(
-        credentialsProvider = AWSCredentialsProviderChain(
-            STSAssumeRoleSessionCredentialsProvider.Builder(
-                "arn:aws:iam::695067801333:role/server-gdn-bamboo",
-                UUID.randomUUID().toString()
-            ).build(),
-
-            STSAssumeRoleSessionCredentialsProvider.Builder(
-                "arn:aws:iam::342470128466:role/dcng-spike-jpt",
-                UUID.randomUUID().toString()
-            ).withStsClient(AWSSecurityTokenServiceClientBuilder
-                .standard()
-                .withCredentials(EC2ContainerCredentialsProviderWrapper())
+        credentialsProvider = STSAssumeRoleSessionCredentialsProvider.Builder(
+            "arn:aws:iam::342470128466:role/dcng-spike-jpt", // escalate permissions
+            UUID.randomUUID().toString()
+        ).withStsClient(
+            AWSSecurityTokenServiceClientBuilder.standard()
+                .withCredentials(
+                    AWSCredentialsProviderChain(
+                        STSAssumeRoleSessionCredentialsProvider.Builder(
+                            "arn:aws:iam::695067801333:role/server-gdn-bamboo", // support Gdańsk Bamboo
+                            UUID.randomUUID().toString()
+                        ).build(),
+                        EC2ContainerCredentialsProviderWrapper() // support cloudtoken daemon
+                    )
+                )
                 .build()
-            ).build()
-        ),
+        ).build(),
         region = Regions.EU_WEST_1,
         regionsWithHousekeeping = listOf(Regions.EU_WEST_1),
         capacity = TextCapacityMediator(Regions.EU_WEST_1),
